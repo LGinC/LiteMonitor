@@ -263,11 +263,13 @@ namespace LiteMonitor.src.UI.SettingsPage
             };
 
             // 3. Refresh Rate
+            int minInterval = PluginManager.GetMinimumInterval(tmpl);
             group.AddInt(this, "Menu.Refresh", "s", 
-                () => inst.CustomInterval > 0 ? inst.CustomInterval : tmpl.Execution.Interval,
+                () => PluginManager.GetEffectiveInterval(inst, tmpl),
                 v => {
-                    if (inst.CustomInterval != v) {
-                        inst.CustomInterval = v;
+                    int safeValue = Math.Max(v, minInterval);
+                    if (inst.CustomInterval != safeValue) {
+                        inst.CustomInterval = safeValue;
                         _modifiedInstanceIds.Add(inst.Id);
                     }
                 },

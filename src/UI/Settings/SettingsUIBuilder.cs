@@ -148,8 +148,13 @@ namespace LiteMonitor.src.UI.SettingsPage
             int idx = get();
             if (idx >= 0 && idx < cmb.Items.Count) cmb.SelectedIndex = idx;
 
-            // Immediate binding
-            cmb.Inner.SelectedIndexChanged += (s, e) => set(cmb.SelectedIndex);
+            // 只保存有效选项，避免 ComboBox 初始化/刷新时的 -1 临时状态写坏配置
+            cmb.Inner.SelectedIndexChanged += (s, e) => 
+            {
+                int selectedIndex = cmb.SelectedIndex;
+                if (selectedIndex >= 0 && selectedIndex < cmb.Items.Count)
+                    set(selectedIndex);
+            };
             page.RegisterRefresh(() => 
             {
                 int idx = get();

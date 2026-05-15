@@ -29,8 +29,9 @@ namespace LiteMonitor.src.Plugins.Native
 
         private static readonly object _clientLock = new object();
         private static readonly ConcurrentDictionary<string, QuoteCache> _cache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, Lazy<Task<string>>> _inflightRequests = new(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan _directCacheTtl = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan _fallbackCacheTtl = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan _fallbackCacheTtl = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan _staleCacheTtl = TimeSpan.FromMinutes(30);
         private static DateTime _fallbackBlockedUntil = DateTime.MinValue;
         private static HttpClient _client = CreateClient();
@@ -62,8 +63,6 @@ namespace LiteMonitor.src.Plugins.Native
             {
                 old = _client;
                 _client = CreateClient();
-                _cache.Clear();
-                _fallbackBlockedUntil = DateTime.MinValue;
             }
 
             _ = Task.Run(async () =>
@@ -91,6 +90,25 @@ namespace LiteMonitor.src.Plugins.Native
                 return cached;
             }
 
+            var lazyTask = _inflightRequests.GetOrAdd(
+                cacheKey,
+                _ => new Lazy<Task<string>>(
+                    () => FetchFreshAsync(info, fallbackUrl, cacheKey),
+                    LazyThreadSafetyMode.ExecutionAndPublication));
+            try
+            {
+                return await lazyTask.Value;
+            }
+            finally
+            {
+                // 只移除当前 Lazy，避免误删同 key 下刚创建的新请求。
+                _inflightRequests.TryRemove(
+                    new KeyValuePair<string, Lazy<Task<string>>>(cacheKey, lazyTask));
+            }
+        }
+
+        private static async Task<string> FetchFreshAsync(SymbolInfo info, string fallbackUrl, string cacheKey)
+        {
             foreach (var source in GetOfficialSources(info))
             {
                 try

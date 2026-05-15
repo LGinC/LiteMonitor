@@ -325,14 +325,24 @@ namespace LiteMonitor.src.Plugins
             return false;
         }
 
+        public static int GetMinimumInterval(PluginTemplate tmpl)
+        {
+            return Math.Max(PluginConstants.DEFAULT_INTERVAL, tmpl?.Execution?.MinInterval ?? 0);
+        }
+
+        public static int GetEffectiveInterval(PluginInstanceConfig inst, PluginTemplate tmpl)
+        {
+            int interval = inst.CustomInterval > 0 ? inst.CustomInterval : tmpl.Execution.Interval;
+            return Math.Max(interval, GetMinimumInterval(tmpl));
+        }
+
         private void StartInstance(PluginInstanceConfig inst, PluginTemplate tmpl)
         {
             var cts = new System.Threading.CancellationTokenSource();
             _cts[inst.Id] = cts;
 
             // 设定间隔 (单位：秒)
-            int interval = inst.CustomInterval > 0 ? inst.CustomInterval : tmpl.Execution.Interval;
-            if (interval < PluginConstants.DEFAULT_INTERVAL) interval = PluginConstants.DEFAULT_INTERVAL;
+            int interval = GetEffectiveInterval(inst, tmpl);
 
             // 使用 Timer 统一调度：初始间隔设为极短(例如 50ms)以触发立即执行
             // 这样第一次执行的结果也能被捕获，从而触发失败重试逻辑
